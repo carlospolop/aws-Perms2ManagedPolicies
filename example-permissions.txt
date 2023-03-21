@@ -1,0 +1,3 @@
+s3:ListAllMyBuckets
+s3:GetBucketLocation
+ec2:DescribeInstances
