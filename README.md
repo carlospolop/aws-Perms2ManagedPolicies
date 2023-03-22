@@ -2,9 +2,9 @@
 
 This script helps you **find AWS managed policies that match a given list of allowed permissions**. It takes the AWS profile name and the path to the file containing the list of allowed permissions as input.
 
-For this, you just need to use a **profile of your own account** with permission to read all the AWS managed roles.
+For this, you just need to write in a **line separated file all the permissions you discovered** you have, and use a **profile of your own account** with permission to read all the AWS managed roles.
 
-It takes around **10min** to run this.
+It takes around **4min** to run this.
 
 ## Quick Start
 
