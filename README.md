@@ -13,8 +13,8 @@ It takes around **4min** to run this.
 pip3 install -r requirements
 
 # Help
-python3 aws-Perms2ManagedRoles.py -h
-usage: aws-Perms2ManagedRoles.py [-h] --profile PROFILE --permissions-file
+python3 aws-Perms2ManagedPolicies.py -h
+usage: aws-Perms2ManagedPolicies.py [-h] --profile PROFILE --permissions-file
                          PERMISSIONS_FILE
 
 Find AWS managed policies matching a list of allowed permissions.
@@ -29,5 +29,5 @@ optional arguments:
 # Replace `<aws-profile>` with your AWS profile name and `<permissions-file-path>` with the path to the file containing the allowed permissions.
 
 # Run example with my profile
-python3 aws-Perms2ManagedRoles.py --profile myadmin --permissions-file example-permissions.txt
+python3 aws-Perms2ManagedPolicies.py --profile myadmin --permissions-file example-permissions.txt
 ```
