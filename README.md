@@ -10,7 +10,7 @@ It takes around **4min** to run this.
 
 ```bash
 
-pip3 install -r requirements
+pip3 install -r requirements.txt
 
 # Help
 python3 aws-Perms2ManagedPolicies.py -h
