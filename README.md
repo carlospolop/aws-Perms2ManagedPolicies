@@ -25,7 +25,7 @@ options:
   --check-bf-perms      Try to remove false possitives by removed combinations that require you to have other permissions if you have used the tool https://github.com/carlospolop/bf-aws-permissions
 
 
-# Run example with my profile
+# Check example permissions
 python3 aws-Perms2ManagedPolicies.py --permissions-file example-permissions.txt
 
 Optimal combinations of AWS managed policies:
@@ -35,7 +35,7 @@ Optimal combinations of AWS managed policies:
 - arn:aws:iam::aws:policy/AmazonChimeFullAccess
 - arn:aws:iam::aws:policy/AmazonChimeReadOnly
 
-# Run example with my profile and check bf permissions (remove false positives)
+# Check example permissions gathered using https://github.com/carlospolop/bf-aws-permissions (remove false positives)
 python3 aws-Perms2ManagedPolicies.py --permissions-file example-permissions.txt --check-bf-perms
 
 Optimal combinations of AWS managed policies:
