@@ -5,7 +5,7 @@ from termcolor import colored
 
 
 aws_bf_permissions_detectable = [
-    "inspector:DescribeAssessmentTemplates",
+	"inspector:DescribeAssessmentTemplates",
 	"elasticloadbalancing::DescribeAccountLimits",
 	"amplifybackend:ListS3Buckets",
 	"config:ListResourceEvaluations",
@@ -55,7 +55,7 @@ aws_bf_permissions_detectable = [
 	"kafka:ListConfigurations",
 	"greengrass:ListComponents",
 	"ecs:ListTaskDefinitionFamilies",
-	"clouddirectory:ListDevelopmentSchemaArns",
+	"clouddirectory:ListDevelopmentSchemapolicy_names",
 	"route53:ListHealthChecks",
 	"codestar:ListProjects",
 	"codebuild:ListCuratedEnvironmentImages",
@@ -848,7 +848,7 @@ aws_bf_permissions_detectable = [
 	"synthetics:DescribeCanariesLastRun",
 	"kendra-ranking:ListRescoreExecutionPlans",
 	"lex:GetBots",
-	"clouddirectory:ListManagedSchemaArns",
+	"clouddirectory:ListManagedSchemapolicy_names",
 	"ec2:DescribeLocalGatewayRouteTableVirtualInterfaceGroupAssociations",
 	"lightsail:GetStaticIps",
 	"ssm:DescribeInstanceInformation",
@@ -1281,7 +1281,7 @@ aws_bf_permissions_detectable = [
 	"ec2:DescribeVerifiedAccessEndpoints",
 	"ec2:DescribeCapacityReservations",
 	"ec2:DescribeStoreImageTasks",
-	"clouddirectory:ListPublishedSchemaArns",
+	"clouddirectory:ListPublishedSchemapolicy_names",
 	"gamelift:DescribeVpcPeeringAuthorizations",
 	"directconnect:DescribeConnections",
 	"iot:ListMitigationActions",
@@ -1559,149 +1559,323 @@ aws_bf_permissions_detectable = [
 
 
 def load_permissions_from_file(file_path: str) -> Set[str]:
-    """Load permissions from a file, one per line."""
-    with open(file_path, "r") as file:
-        permissions = {line.strip() for line in file.readlines()}
-    return permissions
+	"""Load permissions from a file, one per line."""
+	with open(file_path, "r") as file:
+		permissions = {line.strip() for line in file.readlines()}
+	return permissions
 
 def fetch_managed_policies(url: str) -> List[Dict]:
-    """Fetch managed policies from a JSON URL."""
-    response = requests.get(url)
-    if response.status_code == 200:
-        policies = response.json().get("policies", [])
-        return policies
-    else:
-        raise Exception(f"Failed to fetch data: HTTP {response.status_code}")
+	"""Fetch managed policies from a JSON URL."""
+	response = requests.get(url)
+	if response.status_code == 200:
+		policies = response.json().get("policies", [])
+		return policies
+	else:
+		raise Exception(f"Failed to fetch data: HTTP {response.status_code}")
 
 def any_other_permissions(all_permissions: List[Dict], required_permissions: Set[str]) -> bool:
-    """Check if other permissions not owned are in the policy."""
+	"""Check if other permissions not owned are in the policy."""
 
-    all_permissions_tmp = all_permissions.copy()
-    for p in required_permissions:
-        if p in all_permissions_tmp:
-            all_permissions_tmp.remove(p)
-    
-    not_have_perms = []
-    for p in aws_bf_permissions_detectable:
-        if p in all_permissions_tmp:
-            not_have_perms.append(p)
-    
-    return not_have_perms
-    
+	all_permissions_tmp = all_permissions.copy()
+	for p in required_permissions:
+		if p in all_permissions_tmp:
+			all_permissions_tmp.remove(p)
+	
+	not_have_perms = []
+	for p in aws_bf_permissions_detectable:
+		if p in all_permissions_tmp:
+			not_have_perms.append(p)
+	
+	return not_have_perms
+
+def check_if_subset(actions: Set[str], required_permissions: Set[str], check_bf_perms: bool, not_have_perms: Set[str]):
+	"""Check if the actions are a subset of the required permissions."""
+
+	if not required_permissions.issubset(actions):
+		return {
+			"valid_combination": False,
+			"valid_combinations_lacking_one_expected": False,
+			"valid_combinations_lacking_two_expected": False,
+		}
+	
+	return {
+		"valid_combination": not check_bf_perms or (check_bf_perms and len(not_have_perms) == 0),
+		"valid_combinations_lacking_one_expected": check_bf_perms and len(not_have_perms) == 1,
+		"valid_combinations_lacking_two_expected": check_bf_perms and len(not_have_perms) == 2,
+	}
+
+def check_if_subset_but_one(actions: Set[str], required_permissions: Set[str], check_bf_perms: bool, not_have_perms: Set[str]):
+	"""Check if the required permissions but one are a subset of the actions."""
+
+	for permission in required_permissions:
+		modified_permissions = required_permissions - {permission}
+		if modified_permissions.issubset(actions):
+			ret_obj = check_if_subset(actions, modified_permissions, check_bf_perms, not_have_perms)
+			ret_obj["lacking_permissions"] = permission
+			return ret_obj
+	
+	return None
+
+def check_if_subset_but_two(actions: Set[str], required_permissions: Set[str], check_bf_perms: bool, not_have_perms: Set[str]):
+	"""Check if the required permissions but two are a subset of the actions."""
+
+	for permission1 in required_permissions:
+		for permission2 in required_permissions:
+			if permission1 != permission2:
+				modified_permissions = required_permissions - {permission1, permission2}
+				if modified_permissions.issubset(actions):
+					ret_obj = check_if_subset(actions, modified_permissions, check_bf_perms, not_have_perms)
+					ret_obj["lacking_permissions"] = ", ".join([permission1, permission2])
+					return ret_obj
+	
+	return None
+
+def check_len_missing_permissions(actions: Set[str], required_permissions: Set[str], ) -> bool:
+	"""Check if the actions are a subset of the required permissions."""
+
+	required_permissions_tmp = required_permissions.copy()
+	for p in actions:
+		if p in required_permissions_tmp:
+			required_permissions_tmp.remove(p)
+	
+	return len(required_permissions_tmp)
+	
 
 def generate_policy_combinations(policies: List[Dict], required_permissions: Set[str], check_bf_perms: bool) -> List[Set[str]]:
-    policy_actions = {policy['arn']: set(policy['effective_action_names']) for policy in policies if 'arn' in policy and 'effective_action_names' in policy}
-    valid_combinations = []
-    valid_combinations_lacking_one = []
-    valid_combinations_lacking_two = []
-    lonely_combinations = []
+	policy_actions = {policy['name']: set(policy['effective_action_names']) for policy in policies if 'name' in policy and 'effective_action_names' in policy}
+	valid_combinations = []
+	valid_combinations_lacking_one_expected = []
+	valid_combinations_lacking_two_expected = []
+	lonely_combinations = []
+	
+	combination_lacking_one = []
+	combination_lacking_one_and_one_expected = []
+	combination_lacking_one_and_two_expected = []
 
-    for arn1, actions1 in policy_actions.items():
-        if required_permissions.issubset(actions1):
-            not_have_perms = any_other_permissions(actions1, required_permissions)
-            if check_bf_perms and len(not_have_perms) > 2:
-                continue
-            else:
-                if check_bf_perms and len(not_have_perms) == 1:
-                    valid_combinations_lacking_one.append({arn1})
-                elif check_bf_perms and len(not_have_perms) == 2:
-                    valid_combinations_lacking_two.append({arn1})
-                else:
-                    valid_combinations.append({arn1})
-                    lonely_combinations.append(arn1)
+	combination_lacking_two = []
+	combination_lacking_two_and_one_expected = []
+	combination_lacking_two_and_two_expected = []
 
-    # Build combinations of up to 3 policies
-    for arn1, actions1 in policy_actions.items():
-        if not arn1 or arn1 in lonely_combinations:
-            continue
-        
-        # Remove gathered permissions or continue if no permissions were removed
-        prev_required_permissions_len = len(required_permissions)
-        for a in actions1:
-            if a in required_permissions:
-                required_permissions.remove(a)
-        if prev_required_permissions_len == len(required_permissions):
-            continue
-        
-        not_have_perms = any_other_permissions(actions1, required_permissions)
-        if check_bf_perms and len(not_have_perms) > 2:
-                continue
-        
-        # Check with a second policy
-        for arn2, actions2 in policy_actions.items():
-            if arn2 and arn1 != arn2 and arn2 not in lonely_combinations:
-                combined_actions = actions1 | actions2
-                not_have_perms = any_other_permissions(combined_actions, required_permissions)
-                if check_bf_perms and len(not_have_perms) > 2:
-                    continue
-                
-                if required_permissions.issubset(combined_actions):
-                    if check_bf_perms and len(not_have_perms) == 1:
-                        valid_combinations_lacking_one.append({arn1, arn2})
-                    elif check_bf_perms and len(not_have_perms) == 2:
-                        valid_combinations_lacking_two.append({arn1, arn2})
-                    else:
-                        valid_combinations.append({arn1, arn2})
-                    continue
-                
-                # Remove gathered permissions or continue if no permissions were removed
-                prev_required_permissions_len = len(required_permissions)
-                for a in actions2:
-                    if a in required_permissions:
-                        required_permissions.remove(a)
-                if prev_required_permissions_len == len(required_permissions):
-                    continue
+	for policy_name1, actions1 in policy_actions.items():
+		not_have_perms = any_other_permissions(actions1, required_permissions)
+		subset_obj = check_if_subset(actions1, required_permissions, check_bf_perms, not_have_perms)
 
-                # Check with a third policy
-                for arn3, actions3 in policy_actions.items():
-                    if arn3 and arn3 != arn1 and arn3 != arn2 and arn3 not in lonely_combinations:
-                        full_combined_actions = combined_actions | actions3
-                        not_have_perms = any_other_permissions(full_combined_actions, required_permissions)
-                        
-                        if check_bf_perms and len(not_have_perms) > 2:
-                            continue
+		if subset_obj["valid_combination"]:
+			valid_combinations.append([policy_name1])
+			lonely_combinations.append(policy_name1)
+		
+		elif subset_obj["valid_combinations_lacking_one_expected"]:
+			valid_combinations_lacking_one_expected.append([policy_name1])
+		
+		elif subset_obj["valid_combinations_lacking_two_expected"]:
+			valid_combinations_lacking_two_expected.append([policy_name1])
+		
+		else:
+			subset_obj_but_one = check_if_subset_but_one(actions1, required_permissions, check_bf_perms, not_have_perms)
+			if subset_obj_but_one:
+				if subset_obj_but_one["valid_combination"]:
+					combination_lacking_one.append([policy_name1, "Lacking " + subset_obj_but_one["lacking_permissions"]])
+				elif subset_obj_but_one["valid_combinations_lacking_one_expected"]:
+					combination_lacking_one_and_one_expected.append([policy_name1, "Lacking " + subset_obj_but_one["lacking_permission"]])
+				elif subset_obj_but_one["valid_combinations_lacking_two_expected"]:
+					combination_lacking_one_and_two_expected.append([policy_name1, "Lacking " + subset_obj_but_one["lacking_permission"]])
+			
+			else:
+				subset_obj_but_two = check_if_subset_but_two(actions1, required_permissions, check_bf_perms, not_have_perms)
+				if subset_obj_but_two:
+					if subset_obj_but_two["valid_combination"]:
+						combination_lacking_two.append([policy_name1, subset_obj_but_two["lacking_permissions"]])
+					elif subset_obj_but_two["valid_combinations_lacking_one_expected"]:
+						combination_lacking_two_and_one_expected.append([policy_name1, "Lacking " + subset_obj_but_two["lacking_permissions"]])
+					elif subset_obj_but_two["valid_combinations_lacking_two_expected"]:
+						combination_lacking_two_and_two_expected.append([policy_name1, "Lacking " + subset_obj_but_two["lacking_permissions"]])
+
+	# Build combinations of up to 3 policies
+	for policy_name1, actions1 in policy_actions.items():
+		if not policy_name1 or policy_name1 in lonely_combinations:
+			continue
+		
+		# Check if has new needed permissions
+		missing_perms_len_1 = check_len_missing_permissions(actions1, required_permissions)
+		if missing_perms_len_1 == len(required_permissions):
+			continue
+
+		# Remove gathered permissions or continue if no permissions were removed
+		prev_required_permissions_len = len(required_permissions)
+		for a in actions1:
+			if a in required_permissions:
+				required_permissions.remove(a)
+		if prev_required_permissions_len == len(required_permissions):
+			continue
+		
+		not_have_perms = any_other_permissions(actions1, required_permissions)
+		if check_bf_perms and len(not_have_perms) > 2:
+				continue
+		
+		# Check with a second policy
+		for policy_name2, actions2 in policy_actions.items():
+			if policy_name2 and policy_name1 != policy_name2 and policy_name2 not in lonely_combinations:
+				combined_actions = actions1 | actions2
+
+				# Check if has new needed permissions
+				missing_perms_len_2 = check_len_missing_permissions(combined_actions, required_permissions)
+				if missing_perms_len_2 == missing_perms_len_1:
+					continue
+
+				not_have_perms = any_other_permissions(combined_actions, required_permissions)
+				subset_obj = check_if_subset(combined_actions, required_permissions, check_bf_perms, not_have_perms)
+
+				if subset_obj["valid_combination"]:
+					valid_combinations.append([policy_name1, policy_name2])
+					continue
+				
+				elif subset_obj["valid_combinations_lacking_one_expected"]:
+					valid_combinations_lacking_one_expected.append([policy_name1, policy_name2])
+					continue
+				
+				elif subset_obj["valid_combinations_lacking_two_expected"]:
+					valid_combinations_lacking_two_expected.append([policy_name1, policy_name2])
+					continue
+				
+				else:
+					# Check if almost valid (but 1 permission is missing)
+					subset_obj_but_one = check_if_subset_but_one(combined_actions, required_permissions, check_bf_perms, not_have_perms)
+					if subset_obj_but_one:
+						if subset_obj_but_one["valid_combination"]:
+							combination_lacking_one.append([policy_name1, policy_name2, colored("Lacking " + subset_obj_but_one["lacking_permissions"], "red")])
+						elif subset_obj_but_one["valid_combinations_lacking_one_expected"]:
+							combination_lacking_one_and_one_expected.append([policy_name1, policy_name2, colored("Lacking " + subset_obj_but_one["lacking_permission"], "red")])
+						elif subset_obj_but_one["valid_combinations_lacking_two_expected"]:
+							combination_lacking_one_and_two_expected.append([policy_name1, policy_name2, colored("Lacking " + subset_obj_but_one["lacking_permission"], "red")])
+					
+					else:
+						# Check if almost valid (but 2 permissions are missing)
+						subset_obj_but_two = check_if_subset_but_two(combined_actions, required_permissions, check_bf_perms, not_have_perms)
+						if subset_obj_but_two:
+							if subset_obj_but_two["valid_combination"]:
+								combination_lacking_two.append([policy_name1, policy_name2, colored("Lacking " + subset_obj_but_two["lacking_permissions"], "red")])
+							elif subset_obj_but_two["valid_combinations_lacking_one_expected"]:
+								combination_lacking_two_and_one_expected.append([policy_name1, policy_name2, colored("Lacking " + subset_obj_but_two["lacking_permissions"], "red")])
+							elif subset_obj_but_two["valid_combinations_lacking_two_expected"]:
+								combination_lacking_two_and_two_expected.append([policy_name1, policy_name2, colored("Lacking " + subset_obj_but_two["lacking_permissions"], "red")])
+
+				# Check with a third policy
+				for policy_name3, actions3 in policy_actions.items():
+					if policy_name3 and policy_name3 != policy_name1 and policy_name3 != policy_name2 and policy_name3 not in lonely_combinations:
+						full_combined_actions = combined_actions | actions3
 						
-                        if required_permissions.issubset(full_combined_actions):
-                            if check_bf_perms and len(not_have_perms) == 1:
-                                valid_combinations_lacking_one.append({arn1, arn2, arn3})
-                            elif check_bf_perms and len(not_have_perms) == 2:
-                                valid_combinations_lacking_two.append({arn1, arn2, arn3})
-                            else:
-                                valid_combinations.append({arn1, arn2, arn3})
-                            continue
+						# Check if has new needed permissions
+						missing_perms_len_3 = check_len_missing_permissions(full_combined_actions, required_permissions)
+						if missing_perms_len_3 == missing_perms_len_2:
+							continue
+						
+						not_have_perms = any_other_permissions(full_combined_actions, required_permissions)
+						subset_obj = check_if_subset(combined_actions, required_permissions, check_bf_perms, not_have_perms)
 
-    return valid_combinations, valid_combinations_lacking_one, valid_combinations_lacking_two
+						if subset_obj["valid_combination"]:
+							valid_combinations.append([policy_name1, policy_name2, policy_name3])
+							continue
+						
+						elif subset_obj["valid_combinations_lacking_one_expected"]:
+							valid_combinations_lacking_one_expected.append([policy_name1, policy_name2, policy_name3])
+							continue
+						
+						elif subset_obj["valid_combinations_lacking_two_expected"]:
+							valid_combinations_lacking_two_expected.append([policy_name1, policy_name2, policy_name3])
+							continue
+						
+						else:
+							# Check if almost valid (but 1 permission is missing)
+							subset_obj_but_one = check_if_subset_but_one(full_combined_actions, required_permissions, check_bf_perms, not_have_perms)
+							if subset_obj_but_one:
+								if subset_obj_but_one["valid_combination"]:
+									combination_lacking_one.append([policy_name1, policy_name2, policy_name3, colored("Lacking " + subset_obj_but_one["lacking_permissions"], "red")])
+								elif subset_obj_but_one["valid_combinations_lacking_one_expected"]:
+									combination_lacking_one_and_one_expected.append([policy_name1, policy_name2, policy_name3, colored("Lacking " + subset_obj_but_one["lacking_permission"], "red")])
+								elif subset_obj_but_one["valid_combinations_lacking_two_expected"]:
+									combination_lacking_one_and_two_expected.append([policy_name1, policy_name2, policy_name3, colored("Lacking " + subset_obj_but_one["lacking_permission"], "red")])
+							
+							else:
+								# Check if almost valid (but 2 permissions are missing)
+								subset_obj_but_two = check_if_subset_but_two(full_combined_actions, required_permissions, check_bf_perms, not_have_perms)
+								if subset_obj_but_two:
+									if subset_obj_but_two["valid_combination"]:
+										combination_lacking_two.append([policy_name1, policy_name2, policy_name3, colored("Lacking " + subset_obj_but_two["lacking_permissions"], "red")])
+									elif subset_obj_but_two["valid_combinations_lacking_one_expected"]:
+										combination_lacking_two_and_one_expected.append([policy_name1, policy_name2, policy_name3, colored("Lacking " + subset_obj_but_two["lacking_permissions"], "red")])
+									elif subset_obj_but_two["valid_combinations_lacking_two_expected"]:
+										combination_lacking_two_and_two_expected.append([policy_name1, policy_name2, policy_name3, colored("Lacking " + subset_obj_but_two["lacking_permissions"], "red")])
 
-def main(permissions_file: str, check_bf_perms: bool):
-    required_permissions = load_permissions_from_file(permissions_file)
-    policies = fetch_managed_policies("https://raw.githubusercontent.com/iann0036/iam-dataset/main/aws/managed_policies.json")
-    valid_combinations, valid_combinations_lacking_one, valid_combinations_lacking_two = generate_policy_combinations(policies, required_permissions, check_bf_perms)
 
-    print(colored("\nOptimal combinations of AWS managed policies:", "yellow"))
-    for combo in valid_combinations:
-        print(colored(f"- {', '.join(combo)}", "green"))
-    print()
-    
-    if valid_combinations_lacking_one:
-        print(colored("\nCombinations of AWS managed policies that lack one permission:", "yellow"))
-        for combo in valid_combinations_lacking_one:
-            print(colored(f"- {', '.join(combo)}", "green"))
-        print()
-    
-    if valid_combinations_lacking_two:
-        print(colored("\nCombinations of AWS managed policies that lack two permissions:", "yellow"))
-        for combo in valid_combinations_lacking_two:
-            print(colored(f"- {', '.join(combo)}", "green"))
-        print()
-    
+	return valid_combinations, valid_combinations_lacking_one_expected, valid_combinations_lacking_two_expected, combination_lacking_one, combination_lacking_one_and_one_expected, combination_lacking_one_and_two_expected, combination_lacking_two, combination_lacking_two_and_one_expected, combination_lacking_two_and_two_expected
+
+def main(permissions_file: str, check_bf_perms: bool, check_with_lacking_perms: bool):
+	required_permissions = load_permissions_from_file(permissions_file)
+	policies = fetch_managed_policies("https://raw.githubusercontent.com/iann0036/iam-dataset/main/aws/managed_policies.json")
+	valid_combinations, valid_combinations_lacking_one_expected, valid_combinations_lacking_two_expected, combination_lacking_one, combination_lacking_one_and_one_expected, combination_lacking_one_and_two_expected, combination_lacking_two, combination_lacking_two_and_one_expected, combination_lacking_two_and_two_expected = generate_policy_combinations(policies, required_permissions, check_bf_perms)
+
+	print(colored("\nOptimal combinations of AWS managed policies:", "yellow"))
+	for combo in valid_combinations:
+		print(colored(f"- {', '.join(combo)}", "green"))
+	print()
+	
+	if valid_combinations_lacking_one_expected and check_bf_perms:
+		print(colored("\nCombinations of AWS managed policies that lack one expected BF permission:", "yellow"))
+		for combo in valid_combinations_lacking_one_expected:
+			print(colored(f"- {', '.join(combo)}", "green"))
+		print()
+	
+	if valid_combinations_lacking_two_expected and check_bf_perms:
+		print(colored("\nCombinations of AWS managed policies that lack two expected BF permissions:", "yellow"))
+		for combo in valid_combinations_lacking_two_expected:
+			print(colored(f"- {', '.join(combo)}", "green"))
+		print()
+	
+	if combination_lacking_one and check_with_lacking_perms:
+		print(colored("\nCombinations of AWS managed policies that lack one permission:", "yellow"))
+		for combo in combination_lacking_one:
+			print(colored(f"- {', '.join(combo)}", "green"))
+		print()
+	
+	if combination_lacking_one_and_one_expected and check_with_lacking_perms and check_bf_perms:
+		print(colored("\nCombinations of AWS managed policies that lack one permission and one expected BF permission:", "yellow"))
+		for combo in combination_lacking_one_and_one_expected:
+			print(colored(f"- {', '.join(combo)}", "green"))
+		print()
+	
+	if combination_lacking_one_and_two_expected and check_with_lacking_perms and check_bf_perms:
+		print(colored("\nCombinations of AWS managed policies that lack one permission and two expected BF permissions:", "yellow"))
+		for combo in combination_lacking_one_and_two_expected:
+			print(colored(f"- {', '.join(combo)}", "green"))
+		print()
+	
+	if combination_lacking_two and check_with_lacking_perms:
+		print(colored("\nCombinations of AWS managed policies that lack two permissions:", "yellow"))
+		for combo in combination_lacking_two:
+			print(colored(f"- {', '.join(combo)}", "green"))
+		print()
+	
+	if combination_lacking_two_and_one_expected and check_with_lacking_perms and check_bf_perms:
+		print(colored("\nCombinations of AWS managed policies that lack two permissions and one expected BF permission:", "yellow"))
+		for combo in combination_lacking_two_and_one_expected:
+			print(colored(f"- {', '.join(combo)}", "green"))
+		print()
+	
+	if combination_lacking_two_and_two_expected and check_with_lacking_perms and check_bf_perms:
+		print(colored("\nCombinations of AWS managed policies that lack two permissions and two expected BF permissions:", "yellow"))
+		for combo in combination_lacking_two_and_two_expected:
+			print(colored(f"- {', '.join(combo)}", "green"))
+		print()
+	
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Find combinations of AWS managed policies that together match a list of allowed permissions.")
-    parser.add_argument("--permissions-file", type=str, required=True, help="Path to the file containing allowed permissions, one per line")
-    parser.add_argument("--check-bf-perms", default=False, action="store_true", help="Try to remove false possitives by removed combinations that require you to have other permissions if you have used the tool https://github.com/carlospolop/bf-aws-permissions")
-    args = parser.parse_args()
-    main(permissions_file=args.permissions_file, check_bf_perms=args.check_bf_perms)
+	parser = argparse.ArgumentParser(description="Find combinations of AWS managed policies that together match a list of allowed permissions.")
+	parser.add_argument("--permissions-file", type=str, required=True, help="Path to the file containing allowed permissions, one per line")
+	parser.add_argument("--check-bf-perms", default=False, action="store_true", help="Try to remove false possitives by removed combinations that require you to have other permissions if you have used the tool https://github.com/carlospolop/bf-aws-permissions")
+	parser.add_argument("--check-with-lacking-perms", default=False, action="store_true", help="Find combinations of managed policies that are lacking one or two permissions")
+	args = parser.parse_args()
+	main(permissions_file=args.permissions_file, check_bf_perms=args.check_bf_perms, check_with_lacking_perms=args.check_with_lacking_perms)
 
 
 

@@ -9,12 +9,8 @@ chime:ListMediaInsightsPipelineConfigurations
 chime:ListMediaPipelineKinesisVideoStreamPools
 chime:ListMediaPipelines
 chime:GetMessagingSessionEndpoint
-chime:GetGlobalSettings
-chime:GetPhoneNumberSettings
 chime:GetVoiceConnectorLoggingConfiguration
 chime:ListAvailableVoiceConnectorRegions
-chime:ListPhoneNumberOrders
-chime:ListPhoneNumbers
 chime:ListSipMediaApplications
 chime:ListSipRules
 chime:ListVoiceConnectorGroups
