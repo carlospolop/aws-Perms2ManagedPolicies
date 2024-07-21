@@ -42,6 +42,7 @@ Optimal combinations of AWS managed policies:
 - arn:aws:iam::aws:policy/AmazonChimeReadOnly
 ```
 
-### Potential false negatives
+### Potential false negatives from brute-forcing permissions
 
-- If the principal is allowed to perform an action but **only over an specific condition** and the brute-forcing didn't discover it's allowed, the script will not find the managed policy as it it's missing the permission.
+- In case you gather your permissions brute-forcing `Get*`, `Describe*` and `List*` permissions and you have indicated the `--check-bf-perms` param. If the principal is allowed to perform an action but **only over an specific condition** and the brute-forcing didn't discover it's allowed to perform that action, the script will not find the managed policy as it it's missing the permission.
+  - In order to **reduce these kind of false negatives**, this tool also checks for managed policies combinations that **lacks one or two of the expected permissions**.
