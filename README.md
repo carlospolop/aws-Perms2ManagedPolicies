@@ -41,3 +41,7 @@ python3 aws-Perms2ManagedPolicies.py --permissions-file example-permissions.txt 
 Optimal combinations of AWS managed policies:
 - arn:aws:iam::aws:policy/AmazonChimeReadOnly
 ```
+
+### Potential false negatives
+
+- If the principal is allowed to perform an action but **only over an specific condition** and the brute-forcing didn't discover it's allowed, the script will not find the managed policy as it it's missing the permission.
