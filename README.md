@@ -11,7 +11,7 @@ If you used the tool https://github.com/carlospolop/bf-aws-permissions to discov
 
 ```bash
 
-pip3 install -r requirements
+pip3 install -r requirements.txt
 
 # Help
 usage: aws-Perms2ManagedPolicies.py [-h] --permissions-file PERMISSIONS_FILE [--check-bf-perms]
