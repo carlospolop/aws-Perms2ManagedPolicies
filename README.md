@@ -1,10 +1,10 @@
 # AWS Managed Policies Finder
 
-This script helps you **find AWS managed policies that match a given list of allowed permissions**. It takes the AWS profile name and the path to the file containing the list of allowed permissions as input.
+This script helps you **find AWS managed policies that match a given list of allowed permissions**. You just need to write in a **line separated file all the permissions you discovered** you have.
 
-For this, you just need to write in a **line separated file all the permissions you discovered** you have.
+Moreover, this tool checks **up to combinations of 3 different AWS managed policies** that would grant the indicated permissions in the input file.
 
-Moreover, if you used the tool https://github.com/carlospolop/bf-aws-permissions to discover your permissions you can use the parameter `--check-bf-perms` to **remove false positives** of managed policies combinations that **have all the required permissions, and more that you don't have**.
+If you used the tool https://github.com/carlospolop/bf-aws-permissions to discover your permissions you can use the parameter `--check-bf-perms` to **remove false positives** of managed policies combinations that **have all the required permissions, and more that you don't have**.
 
 
 ## Quick Start
