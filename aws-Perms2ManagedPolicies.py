@@ -1682,15 +1682,17 @@ def main(permissions_file: str, check_bf_perms: bool):
         print(colored(f"- {', '.join(combo)}", "green"))
     print()
     
-    print(colored("\nCombinations of AWS managed policies that lack one permission:", "yellow"))
-    for combo in valid_combinations_lacking_one:
-        print(colored(f"- {', '.join(combo)}", "green"))
-    print()
+    if valid_combinations_lacking_one:
+        print(colored("\nCombinations of AWS managed policies that lack one permission:", "yellow"))
+        for combo in valid_combinations_lacking_one:
+            print(colored(f"- {', '.join(combo)}", "green"))
+        print()
     
-    print(colored("\nCombinations of AWS managed policies that lack two permissions:", "yellow"))
-    for combo in valid_combinations_lacking_two:
-        print(colored(f"- {', '.join(combo)}", "green"))
-    print()
+    if valid_combinations_lacking_two:
+        print(colored("\nCombinations of AWS managed policies that lack two permissions:", "yellow"))
+        for combo in valid_combinations_lacking_two:
+            print(colored(f"- {', '.join(combo)}", "green"))
+        print()
     
 
 
